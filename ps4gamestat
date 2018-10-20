@@ -36,9 +36,10 @@ sys.path.append(os.path.join(DIR, 'python-ps4'))
 sys.path.append(os.path.join(DIR, 'construct'))
 from pyps4 import ddp
 from time import time
+from socket import timeout as ExTimeout
 
 # Change this for you own
-DB_PATH = '/opt/local/var/db/ps4gamestat.db'
+DB_PATH = '/opt/local/var/db/ps4gamestat/ps4gamestat.db'
 
 
 def main(argv):
@@ -70,7 +71,7 @@ def main(argv):
 def check_state(host, duration):
     try:
         info = ddp.search(host=host, broadcast=False)[0]
-    except timeout:
+    except ExTimeout:
         return
 
     if 'status' in info and info['status'] == 'Ok' and 'running-app-titleid' in info:
