@@ -1,0 +1,129 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+# Copyright (c) 2018, KOL
+# All rights reserved.
+
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of the <organization> nor the
+#       names of its contributors may be used to endorse or promote products
+#       derived from this software without specific prior written permission.
+
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTLICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY
+# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+# SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+import sqlite3
+import sys
+import os
+import threading
+
+DIR = os.path.dirname(sys.argv[0])
+sys.path.append(os.path.join(DIR, 'python-ps4'))
+sys.path.append(os.path.join(DIR, 'construct'))
+from pyps4 import ddp
+from time import time
+
+# Change this for you own
+DB_PATH = '/opt/local/var/db/ps4gamestat.db'
+
+
+def main(argv):
+    if len(argv) < 2:
+        return usage(argv)
+
+    hosts = argv[1:]
+    db = sqlite3.connect(DB_PATH)
+    c = init_db(db)
+    c.execute('SELECT time FROM ps4_last_check WHERE id=1')
+    last_check = c.fetchone()
+    timestamp = int(time())
+    duration = 0
+
+    if last_check:
+        duration = timestamp - last_check[0]
+    if duration < 1 or duration > 180:
+        duration = 60
+
+    for host in hosts:
+        t = threading.Thread(target=check_state, args=(host, duration,))
+        t.start()
+
+    c.execute('INSERT INTO ps4_last_check VALUES(?, ?)',  (1, timestamp))
+    db.commit()
+    db.close()
+
+
+def check_state(host, duration):
+    try:
+        info = ddp.search(host=host, broadcast=False)[0]
+    except timeout:
+        return
+
+    if 'status' in info and info['status'] == 'Ok' and 'running-app-titleid' in info:
+        update_usage(info, duration)
+
+
+def update_usage(info, duration):
+    db = sqlite3.connect(DB_PATH)
+    c = db.cursor()
+    c.execute(
+        'UPDATE ps4_stats SET duration=?+duration WHERE date=DATE() AND host_id=? AND app_id=?',
+        (duration, info['host-id'], info['running-app-titleid'])
+    )
+    if not c.rowcount:
+        print info
+        c.execute('''INSERT OR REPLACE INTO ps4_stats
+                (date, host_id, app_id, host_name, host_type, app_name, duration)
+                VALUES(DATE(), ?, ?, ?, ?, ?, ?)
+            ''',
+            (info['host-id'], info['running-app-titleid'], info['host-name'],
+                info['host-type'], info['running-app-name'], duration)
+        )
+    db.commit()
+    db.close()
+
+
+def init_db(db):
+    c = db.cursor()
+    # Create table
+    c.executescript('''
+        CREATE TABLE IF NOT EXISTS ps4_stats (
+            date text,
+            host_id text,
+            host_name text,
+            host_type text,
+            app_id text,
+            app_name text,
+            duration integer,
+            PRIMARY KEY(date, host_id, app_id)
+        );
+        CREATE TABLE IF NOT EXISTS ps4_last_check (
+            id integer PRIMARY KEY ON CONFLICT REPLACE,
+            time integer
+        );
+    ''')
+    db.commit()
+    # Save (commit) the changes
+    return c
+
+
+def usage(argv):
+    print argv[0] + ' host1[, host2, host3, ...]'
+    return 1
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))
