@@ -26,20 +26,25 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import sqlite3
 import sys
 import os
-import threading
 
-DIR = os.path.dirname(sys.argv[0])
+DIR = os.path.dirname(os.path.realpath(sys.argv[0]))
 sys.path.append(os.path.join(DIR, 'python-ps4'))
 sys.path.append(os.path.join(DIR, 'construct'))
+
+import sqlite3
+import threading
+import time
 from pyps4 import ddp
-from time import time
 from socket import timeout as ExTimeout
+from BaseHTTPServer import BaseHTTPRequestHandler,HTTPServer
+
 
 # Change this for you own
 DB_PATH = '/opt/local/var/db/ps4gamestat/ps4gamestat.db'
+CH_INTERVAL = 60
+WEB_PORT = 8054
 
 
 def main(argv):
@@ -47,26 +52,42 @@ def main(argv):
         return usage(argv)
 
     hosts = argv[1:]
-    db = sqlite3.connect(DB_PATH)
-    c = init_db(db)
-    c.execute('SELECT time FROM ps4_last_check WHERE id=1')
-    last_check = c.fetchone()
-    timestamp = int(time())
-    duration = 0
 
-    if last_check:
-        duration = timestamp - last_check[0]
-    if duration < 1 or duration > 180:
-        duration = 60
+    try:
+        cron = threading.Thread(target=cronjob, args=(hosts,))
+        cron.daemon = True
+        cron.start()
+        http = HTTPServer(('', WEB_PORT), WS)
+        http.serve_forever()
+    except (KeyboardInterrupt, SystemExit):
+        return 0
 
-    for host in hosts:
-        t = threading.Thread(target=check_state, args=(host, duration,))
-        t.start()
 
-    c.execute('INSERT INTO ps4_last_check VALUES(?, ?)',  (1, timestamp))
-    db.commit()
-    db.close()
+def cronjob(hosts):
+    while True:
+        db = sqlite3.connect(DB_PATH)
+        c = init_db(db)
+        last_check = get_last_check(c)
+        timestamp = int(time.time())
+        duration = 0
 
+        if last_check:
+            duration = timestamp - last_check[0]
+        if duration < 1 or duration > (CH_INTERVAL * 2):
+            duration = CH_INTERVAL
+
+        for host in hosts:
+            t = threading.Thread(target=check_state, args=(host, duration,))
+            t.start()
+        c.execute('INSERT INTO ps4_last_check VALUES(?, ?)',  (1, timestamp))
+        db.commit()
+        db.close()
+        time.sleep(CH_INTERVAL)
+
+
+def get_last_check(cursor):
+    cursor.execute('SELECT time FROM ps4_last_check WHERE id=1')
+    return cursor.fetchone()
 
 def check_state(host, duration):
     try:
@@ -86,7 +107,6 @@ def update_usage(info, duration):
         (duration, info['host-id'], info['running-app-titleid'])
     )
     if not c.rowcount:
-        print info
         c.execute('''INSERT OR REPLACE INTO ps4_stats
                 (date, host_id, app_id, host_name, host_type, app_name, duration)
                 VALUES(DATE(), ?, ?, ?, ?, ?, ?)
@@ -96,6 +116,14 @@ def update_usage(info, duration):
         )
     db.commit()
     db.close()
+
+
+def get_usage_data():
+    db = sqlite3.connect(DB_PATH)
+    c = db.cursor()
+    c.execute('''SELECT app_id, app_name, CAST(SUM(duration) as REAL)/3600 duration
+        FROM ps4_stats GROUP BY app_id ORDER BY duration DESC''')
+    return c.fetchall()
 
 
 def init_db(db):
@@ -125,6 +153,50 @@ def init_db(db):
 def usage(argv):
     print argv[0] + ' host1[, host2, host3, ...]'
     return 1
+
+
+class WS(BaseHTTPRequestHandler):
+    def _set_headers(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html; charset=utf-8')
+        self.end_headers()
+
+    def do_GET(self):
+        data = get_usage_data()
+        self._set_headers()
+        output = ''
+        for row in data:
+            output = output + (
+                u'''<tr>
+                        <td><a href="https://store.playstation.com/ru-ru/product/%s_00" target="_blank">%s</a></td>
+                        <td>%.2f</td>
+                    </tr>''' % row
+            )
+
+        self.wfile.write((u'''<!doctype html>
+            <html lang="en">
+              <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+                <meta name="description" content="">
+                <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" rel="stylesheet">
+                <title>PS4 Game Stat</title>
+            </head>
+            <body class="bg-dark">
+            <table class="table table-dark table-striped">
+                <thead>
+                    <tr><th>Game</th><th>Time (h)</th></tr>
+                </thead>
+                <tbody>%s</tbody>
+            </table>
+            </body></html>''' % output).encode('utf-8'))
+
+    def do_HEAD(self):
+        self._set_headers()
+
+    def do_POST(self):
+        self.send_response(405)
+
 
 if __name__ == '__main__':
     sys.exit(main(sys.argv))

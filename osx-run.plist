@@ -2,20 +2,18 @@
 <!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>Label</key>
-	<string>com.github.kolsys.ps4gamestat</string>
-	<key>ProgramArguments</key>
-	<array>
-		<string>/opt/local/bin/ps4gamestat</string>
-		<!-- Add PS4 IPs -->
-		<string>{HOST1}</string>
-		<string>{HOST2}</string>
-	</array>
-	<key>RunAtLoad</key>
-	<false/>
-	<key>ServiceDescription</key>
-	<string>Get PS4 usage stat</string>
-	<key>StartInterval</key>
-	<integer>60</integer>
+    <key>Label</key>
+    <string>com.github.kolsys.ps4gamestat</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/local/bin/ps4gamestat</string>
+        <!-- Add PS4 IPs -->
+        <string>{HOST1}</string>
+        <string>{HOST2}</string>
+    </array>
+    <key>StandardErrorPath</key>
+    <string>/Library/Logs/ps4gamestat.log</string>
+    <key>StandardOutPath</key>
+    <string>/Library/Logs/ps4gamestat.log</string>
 </dict>
 </plist>
