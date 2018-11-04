@@ -4,6 +4,8 @@
 <dict>
     <key>Label</key>
     <string>com.github.kolsys.ps4gamestat</string>
+    <key>OnDemand</key>
+    <false/>
     <key>ProgramArguments</key>
     <array>
         <string>/opt/local/bin/ps4gamestat</string>
