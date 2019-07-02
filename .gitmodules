@@ -1,6 +1,6 @@
 [submodule "python-ps4"]
 	path = python-ps4
-	url = https://github.com/hthiery/python-ps4.git
+	url = https://github.com/kolsys/python-ps4.git
 [submodule "construct"]
 	path = construct
 	url = https://github.com/construct/construct.git

@@ -1,5 +1,5 @@
 # ps4gamestat
-PS4 Usage statistics aggregator
+PlayStation 4 Usage statistics aggregator
 
 # Installation
 
