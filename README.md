@@ -17,7 +17,7 @@ sudo -u www /INSTALLATION/PATH/ps4gamestat PS4_IP\[ PS4_IP_2 ... PS4_IP_N\]
 Open statistics in the browser: http://localhost:8054/
 
 # Autostart
-You can use systemd sysV for autostarting daemon on Linux.
+You can use systemd, upstart or SysVinit for autostarting daemon on Linux.
 
 For OSX change you PS4 host in `osx-run.plist` and add to autostart:
 ```
