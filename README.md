@@ -13,7 +13,8 @@ Change DB_PATH and WEB_PORT variable if you needed.
 
 # Runing
 
-sudo -u www /INSTALLATION/PATH/ps4gamestat PS4_IP\[ PS4_IP_2 ... PS4_IP_N\]
+`sudo -u www /INSTALLATION/PATH/ps4gamestat PS4_IP[ PS4_IP_2 ... PS4_IP_N]`
+
 Open statistics in the browser: http://localhost:8054/
 
 # Autostart
